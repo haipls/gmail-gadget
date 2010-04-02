@@ -1,0 +1,9 @@
+@CHARSET "UTF-8";
+
+body, table, td, th, h1, h2, h3, h4, h5, h6, p, span, a, div,input,textarea,strong{
+  font-family:Dotum; font-size:12px; text-decoration:none; word-break:break-all; color:#606060; line-height:18px;
+}
+
+/*link style*/
+a:visited, a:link, a{text-decoration:none}
+a:hover{color:#0059B1;text-decoration:underline}
