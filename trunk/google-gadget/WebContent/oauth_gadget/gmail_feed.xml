@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8" ?> 
+<Module>
+  <ModulePrefs title="Unread Gmail Messages" scrolling="true">
+    <Require feature="opensocial-0.8" />
+    <Require feature="locked-domain"/>
+    <OAuth>
+      <Service name="google">
+        <Access url="https://www.google.com/accounts/OAuthGetAccessToken" method="GET" /> 
+        <Request url="https://www.google.com/accounts/OAuthGetRequestToken?scope=https://mail.google.com/mail/feed/atom/" method="GET" /> 
+        <Authorization url="https://www.google.com/accounts/OAuthAuthorizeToken?oauth_callback=http://oauth.gmodules.com/gadgets/oauthcallback" /> 
+      </Service>
+    </OAuth>
+  </ModulePrefs>
+  <UserPref name="domain_name" display_name="Google Apps Domain(For link)" datatype="string" default_value="" required="true"/>
+  <UserPref name="show_date" display_name="Show Dates?" datatype="bool" default_value="false"/>
+  <UserPref name="num_entries" display_name="Number of Entries:" default_value="5"/>
+  <UserPref name="show_summ" display_name="Show Summaries?" datatype="bool" default_value="false"/>
+  <Content type="html">
+  <![CDATA[ 
+  <!-- shindig oauth popup handling code -->
+  <script type="text/javascript" src="https://gadget-doc-examples.googlecode.com/svn/trunk/opensocial-gadgets/popup.js"></script>
+  <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.4/jquery.min.js"></script>
+  <script type="text/javascript" src="https://netkillertest.appspot.com/js/jquery-ui-1.8.custom.min.js"></script>
+  <link type="text/css" rel="stylesheet" href="https://netkillertest.appspot.com/stylesheets/main.css">
+  <link type="text/css" rel="stylesheet" href="https://netkillertest.appspot.com/stylesheets/redmond/jquery-ui-1.8.custom.css">
+
+  <div id="main" style="display: none">
+  </div>
+
+  <div id="approval" style="display: none">
+    <img src="http://gadget-doc-examples.googlecode.com/svn/trunk/images/new.gif">
+    <a href="#" id="personalize">Personalize this gadget</a>
+  </div>
+
+  <div id="waiting" style="display: none">
+    Please click
+    <a href="#" id="approvaldone">I've approved access</a>
+    once you've approved access to your data.
+  </div>
+  
+  <div id="userMenu" style="display: none">
+  	<a id="inbox_url" target="gmail_popup">More..</a>
+  	<a id="compose_url" target="gmail_popup">Compose Mail</a>
+  </div>
+
+  <script type="text/javascript">
+  	$(function() {
+		$("#inbox_url, #compose_url").button();
+	});
+	// Get Userprefs
+	var prefs = new gadgets.Prefs();
+	var showdate = prefs.getBool("show_date");
+	var entries = prefs.getInt("num_entries");
+	var summaries = prefs.getBool("show_summ");
+	var domain = prefs.getString("domain_name");
+    // Display UI depending on OAuth access state of the gadget (see <divs> above).
+    // If user hasn't approved access to data, provide a "Personalize this gadget" link
+    // that contains the oauthApprovalUrl returned from makeRequest.
+    //
+    // If the user has opened the popup window but hasn't yet approved access, display
+    // text prompting the user to confirm that s/he approved access to data.  The user
+    // may not ever need to click this link, if the gadget is able to automatically
+    // detect when the user has approved access, but showing the link gives users
+    // an option to fetch their data even if the automatic detection fails.
+    //
+    // When the user confirms access, the fetchData() function is invoked again to
+    // obtain and display the user's data.
+    function showOneSection(toshow) {
+      var sections = [ 'main', 'approval', 'waiting' ];
+      for (var i=0; i < sections.length; ++i) {
+        var s = sections[i];
+        var el = document.getElementById(s);
+        if (s == toshow) {
+          el.style.display = "block";
+        } else {
+          el.style.display = "none";
+        }
+      }
+    }
+    
+    function showUserMenu() {
+    	var userMenu = document.getElementById("userMenu");
+    	userMenu.style.display = "block";
+    }
+    
+    // Process returned JSON feed to display data.
+    function showResults(result) {
+      var emailUrl;
+      if (domain == 'nodomain') {
+      	emailUrl = 'http://mail.google.com/mail';
+      } else {
+        emailUrl = 'http://mail.google.com/a/'+domain+'/mail';
+      }
+      showOneSection('main');
+	  //<br>
+      document.getElementById("main").appendChild(document.createElement("br"));
+	  //mail list
+      var list = result.Entry;
+      var fullcount = result.fullcount;
+      document.getElementById('inbox_url').href = emailUrl + '#inbox';
+      document.getElementById('compose_url').href = emailUrl + '#compose';
+        
+      for(var i = 0; i < list.length; i++) {
+        var divElement = document.createElement('div');
+      	var html = "";
+        var entry = list[i];
+        
+        var mailLink = (entry.Link).replace('http://mail.google.com/mail', emailUrl);
+        html += '<a href="'+mailLink+'" target="gmail_popup"><u>'+entry.Title+'</u></a>';
+       
+        if (showdate==true) { 
+          var milliseconds = entry.Date;
+          var date = new Date(milliseconds);
+          html += "<br/>";
+          html += date.toLocaleDateString();
+          html += " ";
+          html += date.toLocaleTimeString();
+          html += "<br/>"
+        }
+
+		if (summaries==true) { 
+          html += entry.Summary + "<p>";
+        }
+
+        divElement.innerHTML = html;
+        document.getElementById("main").appendChild(divElement);
+      }
+    }
+
+    // Invoke makeRequest() to fetch data from the service provider endpoint.
+    // Depending on the results of makeRequest, decide which version of the UI
+    // to ask showOneSection() to display. If user has approved access to his
+    // or her data, display data.
+    // If the user hasn't approved access yet, response.oauthApprovalUrl contains a
+    // URL that includes a Google-supplied request token. This is presented in the 
+    // gadget as a link that the user clicks to begin the approval process.     
+    function fetchData() {
+      var params = {};
+      var url = "https://mail.google.com/mail/feed/atom/";
+      params[gadgets.io.RequestParameters.CONTENT_TYPE] = gadgets.io.ContentType.FEED;
+      params[gadgets.io.RequestParameters.AUTHORIZATION] = gadgets.io.AuthorizationType.OAUTH;
+      params[gadgets.io.RequestParameters.OAUTH_SERVICE_NAME] = "google";
+      params[gadgets.io.RequestParameters.METHOD] = gadgets.io.MethodType.GET;
+      params[gadgets.io.RequestParameters.NUM_ENTRIES] = new Number(entries);  
+      params[gadgets.io.RequestParameters.GET_SUMMARIES] = summaries; 
+	  
+	  var ts = new Date().getTime();
+      var sep = "?";
+      var refreshInterval = 1800; //30 minutes
+      if (refreshInterval && refreshInterval > 0) {
+        ts = Math.floor(ts / (refreshInterval * 1000));
+      }
+      if (url.indexOf("?") > -1) {
+        sep = "&";
+      }
+      url = [ url, sep, "nocache=", ts ].join("");
+      	
+      gadgets.io.makeRequest(url, function (response) { 
+        if (response.oauthApprovalUrl) {
+          // Create the popup handler. The onOpen function is called when the user
+          // opens the popup window. The onClose function is called when the popup
+          // window is closed.
+          var popup = shindig.oauth.popup({
+            destination: response.oauthApprovalUrl,
+            windowOptions: null,
+            onOpen: function() { showOneSection('waiting'); },
+            onClose: function() { fetchData(); }
+          });
+          
+          // Use the popup handler to attach onclick handlers to UI elements.  The
+          // createOpenerOnClick() function returns an onclick handler to open the
+          // popup window.  The createApprovedOnClick function returns an onclick 
+          // handler that will close the popup window and attempt to fetch the user's
+          // data again.
+          var personalize = document.getElementById('personalize');
+          personalize.onclick = popup.createOpenerOnClick();
+          var approvaldone = document.getElementById('approvaldone');
+          approvaldone.onclick = popup.createApprovedOnClick();
+          showOneSection('approval');
+        } else if (response.data) {
+          showOneSection('main');
+          showResults(response.data);
+          showUserMenu();
+        } else {
+          // The response.oauthError and response.oauthErrorText values may help debug
+          // problems with your gadget.
+          var main = document.getElementById('main');
+          var err = document.createTextNode('OAuth error: ' +
+            response.oauthError + ': ' + response.oauthErrorText);
+          main.appendChild(err);
+          showOneSection('main');
+        }
+      }, params);
+    }
+    
+    // Call fetchData() when gadget loads.
+    gadgets.util.registerOnLoadHandler(fetchData);
+  </script>
+  ]]> 
+  </Content>
+</Module>
